@@ -20,6 +20,30 @@ import com.netflix.spinnaker.orca.pipeline.model.Pipeline
 import com.netflix.spinnaker.orca.pipeline.model.Stage
 
 class KubernetesContainerFinder {
+  static Map parseContainerPartsFrom(String containerName) {
+    String imageName = containerName
+    String tag = ""
+    String registry = ""
+
+    String[] parts = imageName.split('/')
+
+    String head = parts.head()
+
+    if (head.contains('.') || head.startsWith('localhost')) {
+      registry = head
+      imageName = imageName - registry
+    }
+
+    String tail = parts.last()
+
+    if (tail.contains(':')) {
+      tag = tail.split(':').last()
+      imageName = imageName - tag
+    }
+
+    return [registry: registry, tag: tag, repository: imageName ]
+  }
+
   static void populateFromStage(Map operation, Stage stage) {
     // If this is a stage in a pipeline, look in the context for the baked image.
     def deploymentDetails = (stage.context.deploymentDetails ?: []) as List<Map>
@@ -38,11 +62,15 @@ class KubernetesContainerFinder {
           // if the deploy stage's selected pattern wasn't updated before submitting the stage, this step here could fail.
           it.refId == container.imageDescription.stageId
         }
-        if (!image) {
-          throw new IllegalStateException("No image found in context for pattern $container.imageDescription.pattern.")
-        } else {
-          container.imageDescription = [registry: image.registry, tag: image.tag, repository: image.repository]
+
+        if (image) {
+          if (image.tag && image.repository) {
+            return container.imageDescription = [registry: image.registry, tag: image.tag, repository: image.repository]
+          } else if (image.ami) {
+            return container.imageDescription = parseContainerPartsFrom(image.ami)
+          }
         }
+        throw new IllegalStateException("No image found in context for pattern $container.imageDescription.pattern.")
       }
 
       if (container.imageDescription.fromTrigger) {

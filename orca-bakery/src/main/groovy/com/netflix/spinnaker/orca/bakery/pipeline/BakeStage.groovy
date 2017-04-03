@@ -123,6 +123,12 @@ class BakeStage implements BranchingStageDefinitionBuilder, RestartableStage {
               deploymentDetails.put(it, bakeStage.context.get(it))
             }
           }
+
+          if (bakeStage.parentStageId) {
+            def parentStage = bakeInitializationStages.find { it.id == bakeStage.parentStageId}
+            deploymentDetails.put("refId", parentStage.refId)
+          }
+
           return deploymentDetails
         }
       ]
